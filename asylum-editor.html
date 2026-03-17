@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Asylum Level Editor</title>
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box }
+body { overflow:hidden; background:#f0f4f8; font-family:'Segoe UI', system-ui, sans-serif; user-select:none }
+
+/* ── CANVAS fills everything ── */
+#c { position:fixed; inset:0; display:block; cursor:crosshair }
+
+/* ── TOP BAR ── */
+#topbar {
+  position:fixed; top:0; left:0; right:0; height:48px; z-index:20;
+  background:rgba(255,255,255,0.96); border-bottom:1.5px solid #dde3ec;
+  display:flex; align-items:center; gap:8px; padding:0 16px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.07); backdrop-filter:blur(8px);
+}
+#topbar .logo { font-size:13px; font-weight:800; color:#1e293b; letter-spacing:-0.02em; margin-right:8px }
+#topbar .logo span { color:#3b82f6 }
+.sep { width:1px; height:28px; background:#dde3ec; margin:0 4px; flex-shrink:0 }
+.tb-btn {
+  display:flex; align-items:center; gap:5px; padding:5px 10px;
+  border-radius:7px; cursor:pointer; border:1.5px solid transparent;
+  background:#f1f5f9; font-size:12px; font-weight:600; color:#475569;
+  transition:all .1s; white-space:nowrap;
+}
+.tb-btn:hover { background:#e2e8f0; border-color:#cbd5e1 }
+.tb-btn.on { background:#3b82f6; color:#fff; border-color:#2563eb }
+.tb-btn .ico { font-size:14px }
+.tb-key {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px;
+  font-size:10px; font-weight:700; color:#64748b; padding:1px 5px; min-width:20px;
+}
+.tb-btn.on .tb-key { background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.3); color:#fff }
+
+/* ── CROSSHAIR ── */
+#xhair {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  pointer-events:none; z-index:15;
+}
+#xhair::before, #xhair::after {
+  content:''; position:absolute; background:rgba(0,0,0,0.55);
+}
+#xhair::before { width:14px; height:2px; top:-1px; left:-7px }
+#xhair::after  { width:2px; height:14px; top:-7px; left:-1px }
+
+/* ── STATUS BAR ── */
+#status {
+  position:fixed; bottom:0; left:0; right:0; height:26px; z-index:20;
+  background:rgba(255,255,255,0.94); border-top:1.5px solid #dde3ec;
+  display:flex; align-items:center; padding:0 14px; gap:18px;
+  font-size:11px; color:#94a3b8;
+}
+#status b { color:#334155; font-weight:700 }
+
+/* ── PLACE PANEL ── */
+#place-panel {
+  position:fixed; top:48px; right:0; width:230px; bottom:26px; z-index:18;
+  background:#fff; border-left:2px solid #dde3ec;
+  display:flex; flex-direction:column; transform:translateX(230px);
+  transition:transform .2s; box-shadow:-4px 0 20px rgba(0,0,0,0.1);
+}
+#place-panel.visible { transform:translateX(0) }
+
+/* header with search */
+#pp-head {
+  padding:10px 10px 6px; border-bottom:1.5px solid #e8edf4; flex-shrink:0;
+}
+#pp-head-title {
+  font-size:10px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase;
+  color:#94a3b8; margin-bottom:6px;
+}
+#pp-search {
+  width:100%; padding:5px 8px; border:1.5px solid #dde3ec; border-radius:7px;
+  font-size:12px; color:#1e293b; outline:none; background:#f8fafc;
+  transition:border .1s;
+}
+#pp-search:focus { border-color:#3b82f6 }
+
+/* nav arrows + category label */
+#pp-catnav {
+  display:flex; align-items:center; padding:5px 8px; border-bottom:1px solid #f1f5f9;
+  gap:4px; flex-shrink:0;
+}
+#pp-catnav button {
+  width:24px; height:24px; border:1.5px solid #dde3ec; border-radius:5px;
+  background:#f8fafc; cursor:pointer; font-size:13px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .1s;
+}
+#pp-catnav button:hover { background:#e2e8f0 }
+#pp-catname {
+  flex:1; text-align:center; font-size:10px; font-weight:800;
+  letter-spacing:0.06em; text-transform:uppercase; color:#3b82f6;
+}
+
+/* scrollable list */
+#pp-items {
+  flex:1; overflow-y:auto; padding:6px 8px;
+  scroll-behavior:smooth;
+}
+#pp-items::-webkit-scrollbar { width:5px }
+#pp-items::-webkit-scrollbar-thumb { background:#d0dce8; border-radius:3px }
+
+.pp-section {
+  font-size:9px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
+  color:#cbd5e1; padding:10px 0 4px; margin-top:2px;
+}
+
+.pp-item {
+  display:grid; grid-template-columns:44px 1fr; gap:0;
+  border-radius:9px; cursor:pointer; border:2px solid transparent;
+  margin-bottom:4px; transition:all .12s; background:#f8fafc;
+  overflow:hidden;
+}
+.pp-item:hover { background:#f0f7ff; border-color:#bfdbfe }
+.pp-item.sel {
+  background:#eff6ff; border-color:#3b82f6;
+  box-shadow:0 0 0 3px rgba(59,130,246,0.12);
+}
+
+/* left: visual swatch — shows shape + color */
+.pp-swatch {
+  width:44px; height:52px; display:flex; align-items:center;
+  justify-content:center; position:relative; flex-shrink:0;
+  border-right:1.5px solid rgba(0,0,0,0.06);
+}
+.pp-shape {
+  position:absolute;
+}
+.pp-icon-over {
+  position:relative; z-index:1; font-size:16px; line-height:1;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+/* right: text info */
+.pp-info { padding:6px 8px; display:flex; flex-direction:column; justify-content:center }
+.pp-name { font-size:11px; font-weight:700; color:#1e293b; line-height:1.3 }
+.pp-tag  { font-size:9px; font-weight:600; color:#fff; padding:1px 5px; border-radius:3px; display:inline-block; margin-top:2px; width:fit-content }
+.pp-dims { font-size:9px; color:#94a3b8; margin-top:1px }
+
+/* ── Q PANEL (full left overlay) ── */
+#q-panel {
+  position:fixed; top:48px; left:0; width:260px; bottom:26px; z-index:30;
+  background:#fff; border-right:1.5px solid #dde3ec;
+  display:flex; flex-direction:column; transform:translateX(-260px);
+  transition:transform .2s; box-shadow:4px 0 24px rgba(0,0,0,0.1);
+}
+#q-panel.open { transform:translateX(0) }
+#q-panel .qh {
+  padding:12px 16px 10px; font-size:11px; font-weight:800; letter-spacing:0.08em;
+  text-transform:uppercase; color:#64748b; border-bottom:1.5px solid #e8edf4;
+  display:flex; align-items:center; justify-content:space-between;
+}
+#q-panel .qh .qclose {
+  cursor:pointer; font-size:16px; color:#94a3b8; line-height:1; padding:2px 4px;
+  border-radius:4px; transition:color .1s;
+}
+#q-panel .qh .qclose:hover { color:#334155 }
+#q-tabs {
+  display:flex; border-bottom:1.5px solid #e8edf4;
+}
+.q-tab {
+  flex:1; padding:8px 4px; font-size:10px; font-weight:700; text-align:center;
+  cursor:pointer; color:#94a3b8; letter-spacing:0.05em; text-transform:uppercase;
+  border-bottom:2px solid transparent; transition:all .1s;
+}
+.q-tab.on { color:#3b82f6; border-bottom-color:#3b82f6 }
+#q-body { flex:1; overflow-y:auto }
+.q-section { padding:10px 14px 0; font-size:9px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:#cbd5e1; margin-bottom:4px }
+.q-item {
+  display:flex; align-items:center; gap:10px; padding:8px 14px;
+  cursor:pointer; border-bottom:1px solid #f1f5f9; transition:background .1s;
+}
+.q-item:hover { background:#f8fafc }
+.q-item.sel { background:#eff6ff }
+.q-icon { font-size:18px; width:28px; text-align:center; flex-shrink:0 }
+.q-info .q-name { font-size:12px; font-weight:600; color:#1e293b }
+.q-info .q-sub  { font-size:10px; color:#94a3b8 }
+
+/* prop inputs inside q-panel */
+.q-prop { padding:8px 14px; border-bottom:1px solid #f1f5f9 }
+.q-prop label { font-size:10px; font-weight:700; color:#94a3b8; letter-spacing:0.05em; text-transform:uppercase; display:block; margin-bottom:3px }
+.q-prop input, .q-prop select {
+  width:100%; padding:5px 8px; border:1.5px solid #dde3ec; border-radius:6px;
+  font-size:12px; font-weight:600; color:#1e293b; background:#f8fafc; outline:none;
+  transition:border .1s;
+}
+.q-prop input:focus, .q-prop select:focus { border-color:#3b82f6 }
+.q-prop input[type=range] { padding:0; height:4px; accent-color:#3b82f6 }
+.q-del { margin:10px 14px; padding:7px; background:#fee2e2; color:#dc2626; font-weight:700; font-size:12px; border:none; border-radius:7px; cursor:pointer; width:calc(100% - 28px); transition:background .1s }
+.q-del:hover { background:#fecaca }
+
+/* ── HINT TOAST ── */
+#hint {
+  position:fixed; bottom:36px; left:50%; transform:translateX(-50%);
+  background:rgba(15,23,42,0.85); color:#e2e8f0; font-size:12px; font-weight:600;
+  padding:7px 18px; border-radius:8px; pointer-events:none; z-index:25;
+  opacity:0; transition:opacity .3s; white-space:nowrap;
+}
+#hint.show { opacity:1 }
+
+/* scroll */
+#pp-items::-webkit-scrollbar, #q-body::-webkit-scrollbar { width:4px }
+#pp-items::-webkit-scrollbar-thumb, #q-body::-webkit-scrollbar-thumb { background:#d0dce8; border-radius:2px }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="xhair"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">ASYLUM <span>EDITOR</span></div>
+  <div class="sep"></div>
+
+  <div class="tb-btn on" id="btn-lock" onclick="toggleLock()">
+    <span class="ico">🔒</span> Click to Edit
+  </div>
+  <div class="sep"></div>
+
+  <div class="tb-btn" onclick="setPlaceMode('place')" id="bmplace" title="Place pieces">
+    <span class="ico">🧱</span> Place <span class="tb-key">F</span>
+  </div>
+  <div class="tb-btn" onclick="setPlaceMode('erase')" id="bmerase" title="Erase">
+    <span class="ico">✕</span> Erase <span class="tb-key">X</span>
+  </div>
+  <div class="tb-btn" onclick="rotateHeld()" title="Rotate 90°">
+    <span class="ico">↻</span> Rotate <span class="tb-key">R</span>
+  </div>
+  <div class="sep"></div>
+
+  <div class="tb-btn" id="bsnap" onclick="cycleSnap()">
+    <span class="ico">⊞</span> Snap: <b id="snap-val">1m</b>
+  </div>
+  <div class="sep"></div>
+
+  <!-- Floor buttons -->
+  <span style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.06em">FLOOR</span>
+  <div class="tb-btn on" id="fb0" onclick="setFloor(0)">G</div>
+  <div class="tb-btn" id="fb1" onclick="setFloor(1)">1</div>
+  <div class="tb-btn" id="fb2" onclick="setFloor(2)">2</div>
+  <div class="tb-btn" id="fb3" onclick="setFloor(3)">R</div>
+  <div class="sep"></div>
+
+  <div class="tb-btn" id="btn-zoop"  onclick="setZoopMode(!zoopMode)">
+    <span class="ico">⚡</span> Zoop <span class="tb-key">Z</span>
+  </div>
+  <div class="tb-btn" id="btn-stack" onclick="setStackMode(!stackMode)">
+    <span class="ico">📦</span> Stack <span class="tb-key">T</span>
+  </div>
+  <div class="sep"></div>
+  <div class="tb-btn" onclick="saveMap()"><span class="ico">💾</span> Save</div>
+  <div class="tb-btn" onclick="clearAll()" style="color:#dc2626"><span class="ico">🗑</span> Clear</div>
+
+  <div style="margin-left:auto; display:flex; gap:10px; align-items:center; font-size:11px; color:#94a3b8">
+    <span><b style="color:#334155">WASD</b> move</span>
+    <span><b style="color:#334155">Space</b> up</span>
+    <span><b style="color:#3b82f6">E</b> down</span>
+    <span><b style="color:#8b5cf6">Q</b> panel</span>
+    <span><b style="color:#334155">↑↓</b> piece</span>
+    <span><b style="color:#334155">←→</b> category</span>
+    <span><b style="color:#f59e0b">Z</b> zoop</span>
+    <span><b style="color:#8b5cf6">T</b> stack</span>
+    <span><b style="color:#64748b">[ ]</b> height</span>
+    <span><b style="color:#64748b">\`</b> reset h</span>
+  </div>
+</div>
+
+<!-- PLACE PANEL (right) -->
+<div id="place-panel">
+  <div id="pp-head">
+    <div id="pp-head-title">Place Piece <span style="color:#cbd5e1;font-weight:400">↑↓ keys</span></div>
+    <input id="pp-search" placeholder="Search pieces..." oninput="filterPalette(this.value)">
+  </div>
+  <div id="pp-catnav">
+    <button onclick="prevCat()">‹</button>
+    <div id="pp-catname">All</div>
+    <button onclick="nextCat()">›</button>
+  </div>
+  <div id="pp-items"></div>
+</div>
+
+<!-- Q PANEL (left overlay) -->
+<div id="q-panel">
+  <div class="qh">
+    Scene Objects
+    <span class="qclose" onclick="closeQPanel()">✕</span>
+  </div>
+  <div id="q-tabs">
+    <div class="q-tab on" onclick="qTab('placed')"  id="qtab-placed">Placed</div>
+    <div class="q-tab"    onclick="qTab('props')"   id="qtab-props">Props</div>
+    <div class="q-tab"    onclick="qTab('settings')" id="qtab-settings">Scene</div>
+  </div>
+  <div id="q-body"></div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="status">
+  <span>Pieces: <b id="st-count">0</b></span>
+  <span>Floor: <b id="st-floor">Ground</b></span>
+  <span>Pos: <b id="st-pos">—</b></span>
+  <span>Mode: <b id="st-mode">Place</b></span>
+  <span style="margin-left:auto;color:#cbd5e1">Click canvas → start editing · Q = scene panel · F = place · X = erase</span>
+</div>
+
+<!-- HINT TOAST -->
+<div id="hint"></div>
+
+<script type="importmap">{"imports":{"three":"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three'
+
+// ═══════════════════════════════════════════════════
+// PIECE CATALOGUE
+// ═══════════════════════════════════════════════════
+const CAT = {
+  WALLS:    'Walls',
+  FLOORS:   'Floors & Ceilings',
+  OPENINGS: 'Openings',
+  STAIRS:   'Stairs',
+  LIGHTING: 'Lighting',
+  PROPS:    'Props',
+}
+
+const CATALOGUE = [
+  // WALLS — greys, clearly structural
+  { id:'wall',       name:'Wall',          cat:CAT.WALLS,    color:0xa8b8c8, hex:'#a8b8c8', w:4,    h:3.8, d:0.3,  icon:'🧱' },
+  { id:'wall-thin',  name:'Thin Wall',     cat:CAT.WALLS,    color:0xc8d8e4, hex:'#c8d8e4', w:4,    h:3.8, d:0.15, icon:'🧱' },
+  { id:'wall-thick', name:'Thick Wall',    cat:CAT.WALLS,    color:0x8898a8, hex:'#8898a8', w:4,    h:3.8, d:0.6,  icon:'🧱' },
+  { id:'wall-short', name:'Half Wall',     cat:CAT.WALLS,    color:0xb8c8d8, hex:'#b8c8d8', w:4,    h:1.2, d:0.3,  icon:'🧱' },
+  { id:'column',     name:'Column',        cat:CAT.WALLS,    color:0xd8e4f0, hex:'#d8e4f0', w:0.5,  h:3.8, d:0.5,  icon:'🏛' },
+  { id:'pillar-lg',  name:'Large Pillar',  cat:CAT.WALLS,    color:0xc0d0e0, hex:'#c0d0e0', w:0.8,  h:3.8, d:0.8,  icon:'🏛' },
+  // FLOORS — greens
+  { id:'floor-sm',   name:'Floor 4×4',     cat:CAT.FLOORS,   color:0x86efac, hex:'#86efac', w:4,    h:0.2, d:4,    icon:'⬜' },
+  { id:'floor-md',   name:'Floor 8×8',     cat:CAT.FLOORS,   color:0x4ade80, hex:'#4ade80', w:8,    h:0.2, d:8,    icon:'⬜' },
+  { id:'floor-lg',   name:'Floor 16×16',   cat:CAT.FLOORS,   color:0x22c55e, hex:'#22c55e', w:16,   h:0.2, d:16,   icon:'⬜' },
+  { id:'floor-corr', name:'Corridor 4×12', cat:CAT.FLOORS,   color:0xa3e4b8, hex:'#a3e4b8', w:4,    h:0.2, d:12,   icon:'▬' },
+  { id:'ceiling-sm', name:'Ceiling 4×4',   cat:CAT.FLOORS,   color:0x7dd3fc, hex:'#7dd3fc', w:4,    h:0.15,d:4,    icon:'⬜' },
+  { id:'ceiling-md', name:'Ceiling 8×8',   cat:CAT.FLOORS,   color:0x38bdf8, hex:'#38bdf8', w:8,    h:0.15,d:8,    icon:'⬜' },
+  // OPENINGS — blues + dark gate
+  { id:'door',       name:'Door',          cat:CAT.OPENINGS, color:0x60a5fa, hex:'#60a5fa', w:1.8,  h:2.8, d:0.1,  icon:'🚪' },
+  { id:'door-dbl',   name:'Double Door',   cat:CAT.OPENINGS, color:0x3b82f6, hex:'#3b82f6', w:3.6,  h:2.8, d:0.1,  icon:'🚪' },
+  { id:'door-arch',  name:'Arched Door',   cat:CAT.OPENINGS, color:0x93c5fd, hex:'#93c5fd', w:2.0,  h:3.0, d:0.15, icon:'🚪' },
+  { id:'gate',       name:'Gate / Bars',   cat:CAT.OPENINGS, color:0x334155, hex:'#334155', w:3.0,  h:3.2, d:0.1,  icon:'⛓' },
+  { id:'window',     name:'Window',        cat:CAT.OPENINGS, color:0xe0f2fe, hex:'#e0f2fe', w:1.5,  h:1.2, d:0.08, icon:'🪟' },
+  { id:'window-lg',  name:'Window Large',  cat:CAT.OPENINGS, color:0xbae6fd, hex:'#bae6fd', w:2.4,  h:1.8, d:0.08, icon:'🪟' },
+  { id:'arch',       name:'Open Arch',     cat:CAT.OPENINGS, color:0xdbeafe, hex:'#dbeafe', w:2.5,  h:3.2, d:0.2,  icon:'🏛' },
+  // STAIRS — warm oranges
+  { id:'stair',      name:'Staircase',     cat:CAT.STAIRS,   color:0xfb923c, hex:'#fb923c', w:3,    h:4.5, d:7,    icon:'🪜' },
+  { id:'stair-sm',   name:'Short Stair',   cat:CAT.STAIRS,   color:0xfdba74, hex:'#fdba74', w:3,    h:2.0, d:4,    icon:'🪜' },
+  { id:'landing',    name:'Landing',       cat:CAT.STAIRS,   color:0xfde68a, hex:'#fde68a', w:4,    h:0.2, d:4,    icon:'⬜' },
+  { id:'ramp',       name:'Ramp',          cat:CAT.STAIRS,   color:0xfef08a, hex:'#fef08a', w:3,    h:1.5, d:8,    icon:'📐' },
+  // LIGHTING — bright yellows, very distinct
+  { id:'light-ceil', name:'Ceiling Light', cat:CAT.LIGHTING, color:0xfde047, hex:'#fde047', w:0.4,  h:0.2, d:0.4,  icon:'💡' },
+  { id:'light-wall', name:'Wall Sconce',   cat:CAT.LIGHTING, color:0xfbbf24, hex:'#fbbf24', w:0.25, h:0.4, d:0.3,  icon:'🕯' },
+  { id:'light-floor',name:'Floor Lamp',    cat:CAT.LIGHTING, color:0xfef9c3, hex:'#fef9c3', w:0.3,  h:1.8, d:0.3,  icon:'🔦' },
+  { id:'spotlight',  name:'Spotlight',     cat:CAT.LIGHTING, color:0xf59e0b, hex:'#f59e0b', w:0.5,  h:0.5, d:0.5,  icon:'🔆' },
+  // PROPS — warm browns, all distinct sizes
+  { id:'bed',        name:'Bed',           cat:CAT.PROPS,    color:0xfcd9b0, hex:'#fcd9b0', w:1.0,  h:0.6, d:2.2,  icon:'🛏' },
+  { id:'table',      name:'Table',         cat:CAT.PROPS,    color:0xd97706, hex:'#d97706', w:2.0,  h:0.85,d:1.0,  icon:'🪑' },
+  { id:'desk',       name:'Desk',          cat:CAT.PROPS,    color:0xb45309, hex:'#b45309', w:4.0,  h:0.85,d:1.2,  icon:'🗂' },
+  { id:'cabinet',    name:'Cabinet',       cat:CAT.PROPS,    color:0x92400e, hex:'#92400e', w:1.0,  h:2.0, d:0.5,  icon:'🗄' },
+  { id:'shelf',      name:'Shelf',         cat:CAT.PROPS,    color:0xe7c9a8, hex:'#e7c9a8', w:3.0,  h:0.15,d:0.4,  icon:'📚' },
+  { id:'barrel',     name:'Barrel',        cat:CAT.PROPS,    color:0xa16207, hex:'#a16207', w:0.7,  h:1.0, d:0.7,  icon:'🛢' },
+]
+
+const FLOOR_Y     = [0, 4.5, 9.0, 13.5]
+const FLOOR_NAMES = ['Ground', '1st', '2nd', 'Roof']
+const SNAP_OPTS   = [0.25, 0.5, 1, 2]
+
+// ═══════════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════════
+const canvas = document.getElementById('c')
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.setClearColor(0xf0f4f8)
+
+const scene = new THREE.Scene()
+scene.fog = new THREE.Fog(0xf0f4f8, 80, 200)
+
+// Camera
+const cam = new THREE.PerspectiveCamera(65, 1, 0.1, 300)
+cam.position.set(0, 6, 0)
+cam.rotation.order = 'YXZ'
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight)
+  cam.aspect = innerWidth / innerHeight
+  cam.updateProjectionMatrix()
+}
+resize()
+addEventListener('resize', resize)
+
+// Lighting — bright, even, no drama
+scene.add(new THREE.AmbientLight(0xffffff, 0.75))
+const sun = new THREE.DirectionalLight(0xffffff, 0.85)
+sun.position.set(30, 50, 20)
+sun.castShadow = true
+sun.shadow.mapSize.set(2048, 2048)
+Object.assign(sun.shadow.camera, { left:-100, right:100, top:100, bottom:-100, near:0.5, far:250 })
+scene.add(sun)
+const fill = new THREE.DirectionalLight(0xe8f0ff, 0.35)
+fill.position.set(-20, 20, -20)
+scene.add(fill)
+
+// Grids — one per floor
+const grids = FLOOR_Y.map(y => {
+  const g = new THREE.GridHelper(300, 300, 0xb0c0d0, 0xccd8e4)
+  g.position.y = y + 0.01
+  g.material.opacity = 0.65
+  g.material.transparent = true
+  scene.add(g)
+  return g
+})
+
+// Invisible floor plane for raycasting
+const rayPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(500, 500),
+  new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+)
+rayPlane.rotation.x = -Math.PI / 2
+scene.add(rayPlane)
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let locked     = false    // pointer locked = editing mode
+let placeMode  = 'place'  // 'place' | 'erase'
+let curFloor   = 0
+let snapIdx    = 2        // 1m default
+let heldType   = CATALOGUE[0]
+let heldRot    = 0        // rotation in 90° steps
+let pieces     = []       // { mesh, data: {id,x,y,z,rot,floor,w,h,d,color,label} }
+let selectedP  = null     // selected piece record
+let ghost      = null     // ghost preview mesh
+let qOpen      = false
+let qCurrentTab= 'placed'
+
+// Movement
+const keys = {}
+let camYaw   = 0
+let camPitch = 0
+
+// ═══════════════════════════════════════════════════
+// BUILD PLACE PANEL
+// ═══════════════════════════════════════════════════
+// ── PIECE VISUAL SYSTEM ──
+// Each piece gets a distinct color + shape combo so nothing looks the same.
+// Shape: rect (normal wall), thin-rect, square, wide, tall, dot
+// Tag color groups things visually by category
+
+const PIECE_STYLE = {
+  // Walls — greys/blues, varying shapes
+  'wall':       { bg:'#c8d8e8', shape:'rect',      tag:'#6b7280', tagTxt:'WALL'     },
+  'wall-thin':  { bg:'#dce8f4', shape:'thin-rect',  tag:'#6b7280', tagTxt:'THIN'    },
+  'wall-thick': { bg:'#a8b8cc', shape:'thick-rect', tag:'#374151', tagTxt:'THICK'   },
+  'wall-short': { bg:'#d0dce8', shape:'short-rect', tag:'#6b7280', tagTxt:'HALF'    },
+  'column':     { bg:'#e4eaf2', shape:'col',        tag:'#4b5563', tagTxt:'COL'     },
+  'pillar-lg':  { bg:'#d4dce8', shape:'pillar',     tag:'#374151', tagTxt:'PILLAR'  },
+  // Floors — light greens/teals
+  'floor-sm':   { bg:'#d1fae5', shape:'flat-sm',    tag:'#059669', tagTxt:'4×4'     },
+  'floor-md':   { bg:'#a7f3d0', shape:'flat-md',    tag:'#047857', tagTxt:'8×8'     },
+  'floor-lg':   { bg:'#6ee7b7', shape:'flat-lg',    tag:'#065f46', tagTxt:'16×16'   },
+  'floor-corr': { bg:'#c6f7e2', shape:'flat-corr',  tag:'#059669', tagTxt:'CORR'    },
+  'ceiling-sm': { bg:'#e0f2fe', shape:'flat-sm',    tag:'#0284c7', tagTxt:'CEIL 4'  },
+  'ceiling-md': { bg:'#bae6fd', shape:'flat-md',    tag:'#0369a1', tagTxt:'CEIL 8'  },
+  // Openings — blues/cyans
+  'door':       { bg:'#93c5fd', shape:'door',       tag:'#2563eb', tagTxt:'DOOR'    },
+  'door-dbl':   { bg:'#60a5fa', shape:'door-dbl',   tag:'#1d4ed8', tagTxt:'DBL DR'  },
+  'door-arch':  { bg:'#7dd3fc', shape:'door-arch',  tag:'#0284c7', tagTxt:'ARCH DR' },
+  'gate':       { bg:'#334155', shape:'gate',       tag:'#0f172a', tagTxt:'GATE'    },
+  'window':     { bg:'#e0f2fe', shape:'window',     tag:'#0ea5e9', tagTxt:'WIN'     },
+  'window-lg':  { bg:'#bae6fd', shape:'window-lg',  tag:'#0284c7', tagTxt:'WIN LG'  },
+  'arch':       { bg:'#dbeafe', shape:'arch',       tag:'#3b82f6', tagTxt:'ARCH'    },
+  // Stairs — warm oranges
+  'stair':      { bg:'#fed7aa', shape:'stair',      tag:'#ea580c', tagTxt:'STAIR'   },
+  'stair-sm':   { bg:'#ffedd5', shape:'stair-sm',   tag:'#f97316', tagTxt:'STAIR S' },
+  'landing':    { bg:'#fef3c7', shape:'flat-sm',    tag:'#d97706', tagTxt:'LAND'    },
+  'ramp':       { bg:'#fef9c3', shape:'ramp',       tag:'#ca8a04', tagTxt:'RAMP'    },
+  // Lighting — bright yellows
+  'light-ceil': { bg:'#fef08a', shape:'dot',        tag:'#ca8a04', tagTxt:'CEIL L'  },
+  'light-wall': { bg:'#fde68a', shape:'dot-sm',     tag:'#b45309', tagTxt:'WALL L'  },
+  'light-floor':{ bg:'#fef3c7', shape:'tall-thin',  tag:'#d97706', tagTxt:'LAMP'    },
+  'spotlight':  { bg:'#fef08a', shape:'spot',       tag:'#a16207', tagTxt:'SPOT'    },
+  // Props — warm browns/peach
+  'bed':        { bg:'#fde8d0', shape:'bed',        tag:'#9a3412', tagTxt:'BED'     },
+  'table':      { bg:'#fcd9b0', shape:'table',      tag:'#92400e', tagTxt:'TABLE'   },
+  'desk':       { bg:'#fbc880', shape:'desk',       tag:'#78350f', tagTxt:'DESK'    },
+  'cabinet':    { bg:'#e7c9a8', shape:'cabinet',    tag:'#713f12', tagTxt:'CAB'     },
+  'shelf':      { bg:'#f0d8b8', shape:'shelf',      tag:'#92400e', tagTxt:'SHELF'   },
+  'barrel':     { bg:'#e0b888', shape:'barrel',     tag:'#78350f', tagTxt:'BARREL'  },
+}
+
+// Renders an SVG shape inside the swatch that visually represents the piece type
+function swatchSVG(styleKey, bg) {
+  const s = {
+    'rect':       `<rect x="8" y="6" width="28" height="32" rx="2" fill="${bg}" stroke="#8899aa" stroke-width="1.5"/>`,
+    'thin-rect':  `<rect x="14" y="6" width="16" height="32" rx="2" fill="${bg}" stroke="#8899aa" stroke-width="1.5"/>`,
+    'thick-rect': `<rect x="4" y="6" width="36" height="32" rx="2" fill="${bg}" stroke="#5a6a7a" stroke-width="2"/>`,
+    'short-rect': `<rect x="6" y="16" width="32" height="16" rx="2" fill="${bg}" stroke="#8899aa" stroke-width="1.5"/>`,
+    'col':        `<rect x="17" y="4" width="10" height="36" rx="3" fill="${bg}" stroke="#6677aa" stroke-width="1.5"/>`,
+    'pillar':     `<rect x="13" y="4" width="18" height="36" rx="3" fill="${bg}" stroke="#5566aa" stroke-width="2"/>`,
+    'flat-sm':    `<rect x="6" y="18" width="32" height="10" rx="2" fill="${bg}" stroke="#66aa88" stroke-width="1.5"/>`,
+    'flat-md':    `<rect x="2" y="18" width="40" height="10" rx="2" fill="${bg}" stroke="#66aa88" stroke-width="1.5"/>`,
+    'flat-lg':    `<rect x="2" y="20" width="40" height="6" rx="1" fill="${bg}" stroke="#44aa77" stroke-width="1.5"/>`,
+    'flat-corr':  `<rect x="2" y="16" width="40" height="14" rx="2" fill="${bg}" stroke="#55aa88" stroke-width="1.5"/>`,
+    'door':       `<rect x="12" y="4" width="20" height="36" rx="2" fill="${bg}" stroke="#3366cc" stroke-width="2"/><circle cx="28" cy="22" r="2" fill="#3366cc"/>`,
+    'door-dbl':   `<rect x="4" y="4" width="17" height="36" rx="2" fill="${bg}" stroke="#2255bb" stroke-width="1.5"/><rect x="23" y="4" width="17" height="36" rx="2" fill="${bg}" stroke="#2255bb" stroke-width="1.5"/>`,
+    'door-arch':  `<rect x="10" y="16" width="24" height="24" rx="2" fill="${bg}" stroke="#0077bb" stroke-width="2"/><path d="M10 16 Q22 2 34 16" fill="${bg}" stroke="#0077bb" stroke-width="2"/>`,
+    'gate':       `<rect x="6" y="4" width="32" height="36" rx="2" fill="#1e293b" stroke="#0f172a" stroke-width="1.5"/><line x1="14" y1="4" x2="14" y2="40" stroke="#64748b" stroke-width="2.5"/><line x1="22" y1="4" x2="22" y2="40" stroke="#64748b" stroke-width="2.5"/><line x1="30" y1="4" x2="30" y2="40" stroke="#64748b" stroke-width="2.5"/>`,
+    'window':     `<rect x="8" y="14" width="28" height="20" rx="2" fill="#bae6fd" stroke="#0284c7" stroke-width="2"/><line x1="22" y1="14" x2="22" y2="34" stroke="#0284c7" stroke-width="1.5"/><line x1="8" y1="24" x2="36" y2="24" stroke="#0284c7" stroke-width="1.5"/>`,
+    'window-lg':  `<rect x="4" y="12" width="36" height="24" rx="2" fill="#bae6fd" stroke="#0369a1" stroke-width="2"/><line x1="22" y1="12" x2="22" y2="36" stroke="#0369a1" stroke-width="1.5"/><line x1="4" y1="24" x2="40" y2="24" stroke="#0369a1" stroke-width="1.5"/>`,
+    'arch':       `<path d="M8 40 L8 20 Q22 2 36 20 L36 40 Z" fill="${bg}" stroke="#3b82f6" stroke-width="2"/>`,
+    'stair':      `<rect x="4" y="32" width="8" height="8" fill="${bg}" stroke="#ea580c" stroke-width="1.5"/><rect x="12" y="24" width="8" height="16" fill="${bg}" stroke="#ea580c" stroke-width="1.5"/><rect x="20" y="16" width="8" height="24" fill="${bg}" stroke="#ea580c" stroke-width="1.5"/><rect x="28" y="8" width="8" height="32" fill="${bg}" stroke="#ea580c" stroke-width="1.5"/>`,
+    'stair-sm':   `<rect x="6" y="30" width="10" height="10" fill="${bg}" stroke="#f97316" stroke-width="1.5"/><rect x="16" y="20" width="10" height="20" fill="${bg}" stroke="#f97316" stroke-width="1.5"/><rect x="26" y="12" width="10" height="28" fill="${bg}" stroke="#f97316" stroke-width="1.5"/>`,
+    'ramp':       `<polygon points="4,40 40,40 40,10" fill="${bg}" stroke="#ca8a04" stroke-width="2"/>`,
+    'dot':        `<circle cx="22" cy="22" r="12" fill="${bg}" stroke="#ca8a04" stroke-width="2"/>`,
+    'dot-sm':     `<circle cx="22" cy="22" r="8" fill="${bg}" stroke="#b45309" stroke-width="2"/>`,
+    'tall-thin':  `<rect x="18" y="4" width="8" height="36" rx="4" fill="${bg}" stroke="#d97706" stroke-width="1.5"/>`,
+    'spot':       `<polygon points="22,4 34,40 10,40" fill="${bg}" stroke="#a16207" stroke-width="2"/>`,
+    'bed':        `<rect x="6" y="12" width="32" height="22" rx="3" fill="${bg}" stroke="#b45309" stroke-width="1.5"/><rect x="6" y="10" width="14" height="10" rx="2" fill="#f0d0c0" stroke="#b45309" stroke-width="1"/>`,
+    'table':      `<rect x="8" y="16" width="28" height="6" rx="1" fill="${bg}" stroke="#92400e" stroke-width="1.5"/><rect x="10" y="22" width="4" height="14" rx="1" fill="${bg}" stroke="#92400e" stroke-width="1"/><rect x="30" y="22" width="4" height="14" rx="1" fill="${bg}" stroke="#92400e" stroke-width="1"/>`,
+    'desk':       `<rect x="4" y="16" width="36" height="6" rx="1" fill="${bg}" stroke="#78350f" stroke-width="1.5"/><rect x="4" y="22" width="6" height="16" rx="1" fill="${bg}" stroke="#78350f" stroke-width="1"/><rect x="12" y="22" width="6" height="12" rx="1" fill="${bg}" stroke="#78350f" stroke-width="1"/>`,
+    'cabinet':    `<rect x="12" y="4" width="20" height="36" rx="2" fill="${bg}" stroke="#713f12" stroke-width="1.5"/><line x1="12" y1="22" x2="32" y2="22" stroke="#713f12" stroke-width="1"/><circle cx="22" cy="14" r="2" fill="#713f12"/><circle cx="22" cy="30" r="2" fill="#713f12"/>`,
+    'shelf':      `<rect x="4" y="20" width="36" height="5" rx="1" fill="${bg}" stroke="#92400e" stroke-width="1.5"/>`,
+    'barrel':     `<ellipse cx="22" cy="22" rx="14" ry="18" fill="${bg}" stroke="#78350f" stroke-width="1.5"/><line x1="8" y1="16" x2="36" y2="16" stroke="#78350f" stroke-width="1"/><line x1="8" y1="28" x2="36" y2="28" stroke="#78350f" stroke-width="1"/>`,
+  }
+  return s[styleKey] || s['rect']
+}
+
+let ppFilterText = ''
+let ppCatIdx     = 0   // 0 = All, 1+ = specific categories
+const ppAllCats  = ['All', ...new Set(CATALOGUE.map(p => p.cat))]
+
+window.filterPalette = function(val) {
+  ppFilterText = val.toLowerCase()
+  buildPlacePanel()
+}
+
+window.prevCat = function() {
+  ppCatIdx = (ppCatIdx - 1 + ppAllCats.length) % ppAllCats.length
+  document.getElementById('pp-catname').textContent = ppAllCats[ppCatIdx]
+  buildPlacePanel()
+}
+window.nextCat = function() {
+  ppCatIdx = (ppCatIdx + 1) % ppAllCats.length
+  document.getElementById('pp-catname').textContent = ppAllCats[ppCatIdx]
+  buildPlacePanel()
+}
+
+function buildPlacePanel() {
+  const el = document.getElementById('pp-items')
+  el.innerHTML = ''
+
+  let items = CATALOGUE
+  // Filter by category
+  if (ppCatIdx > 0) items = items.filter(p => p.cat === ppAllCats[ppCatIdx])
+  // Filter by search
+  if (ppFilterText) items = items.filter(p =>
+    p.name.toLowerCase().includes(ppFilterText) ||
+    p.cat.toLowerCase().includes(ppFilterText) ||
+    p.id.toLowerCase().includes(ppFilterText)
+  )
+
+  if (!items.length) {
+    el.innerHTML = '<div style="padding:16px;color:#94a3b8;font-size:12px;text-align:center">No pieces found</div>'
+    return
+  }
+
+  // Group by category for display
+  const cats = [...new Set(items.map(p => p.cat))]
+  for (const cat of cats) {
+    if (ppCatIdx === 0) {
+      // show section header in All mode
+      const sec = document.createElement('div')
+      sec.className = 'pp-section'
+      sec.textContent = cat
+      el.appendChild(sec)
+    }
+    for (const piece of items.filter(p => p.cat === cat)) {
+      const ps  = PIECE_STYLE[piece.id] || { bg: piece.hex, shape:'rect', tag:'#6b7280', tagTxt:piece.cat.slice(0,4).toUpperCase() }
+      const svg = swatchSVG(ps.shape, ps.bg)
+      const sel = piece === heldType
+
+      const item = document.createElement('div')
+      item.className = 'pp-item' + (sel ? ' sel' : '')
+      item.id = 'ppi-' + piece.id
+      item.innerHTML = `
+        <div class="pp-swatch" style="background:${ps.bg}22">
+          <svg width="44" height="52" viewBox="0 0 44 44" class="pp-shape">${svg}</svg>
+        </div>
+        <div class="pp-info">
+          <div class="pp-name">${piece.name}</div>
+          <span class="pp-tag" style="background:${ps.tag}">${ps.tagTxt}</span>
+          <div class="pp-dims">${piece.w}×${piece.h}×${piece.d}m</div>
+        </div>`
+      item.onclick = () => selectHeldType(piece)
+      el.appendChild(item)
+    }
+  }
+}
+buildPlacePanel()
+
+function selectHeldType(piece) {
+  heldType = piece
+  // Update cat nav to match
+  const catI = ppAllCats.indexOf(piece.cat)
+  if (catI >= 0) {
+    ppCatIdx = 0  // stay on All, just highlight
+  }
+  document.querySelectorAll('.pp-item').forEach(el => el.classList.remove('sel'))
+  document.getElementById('ppi-' + piece.id)?.classList.add('sel')
+  // Scroll to it
+  document.getElementById('ppi-' + piece.id)?.scrollIntoView({ block:'nearest', behavior:'smooth' })
+  if (ghost) { scene.remove(ghost); ghost = null }
+  if (locked && placeMode === 'place') spawnGhost()
+  setPlaceMode('place')
+  toast(`${piece.icon} ${piece.name} selected`)
+}
+
+// ═══════════════════════════════════════════════════
+// GEOMETRY BUILDERS — each piece type looks distinct in 3D
+// ═══════════════════════════════════════════════════
+function buildGeometry(type, alpha) {
+  const { w, h, d, color, id } = type
+  const isGhost = alpha < 1
+  const group   = new THREE.Group()
+
+  function mesh(geo, col, a = alpha) {
+    const m = new THREE.Mesh(geo,
+      new THREE.MeshLambertMaterial({
+        color: col,
+        transparent: a < 1,
+        opacity: a,
+      })
+    )
+    m.castShadow    = !isGhost
+    m.receiveShadow = !isGhost
+    // edge outline
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: isGhost ? 0x3b82f6 : 0x405060, transparent: a<1, opacity: Math.min(a+0.2,1) })
+    )
+    m.add(edges)
+    group.add(m)
+    return m
+  }
+
+  // ── WALLS ──
+  if (id === 'wall' || id === 'wall-thin' || id === 'wall-thick' || id === 'wall-short') {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+    // horizontal mortar lines every 0.3m
+    for (let y = 0.3; y < h; y += 0.3) {
+      const g = new THREE.BoxGeometry(w, 0.02, d + 0.01)
+      const m2 = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x889aaa, transparent: isGhost, opacity: alpha * 0.6 }))
+      m2.position.y = -h/2 + y
+      group.add(m2)
+    }
+  }
+  // ── COLUMN / PILLAR ──
+  else if (id === 'column' || id === 'pillar-lg') {
+    // shaft
+    mesh(new THREE.CylinderGeometry(w/2, w/2 * 1.1, h - 0.3, 8), color)
+    // capital (top cap)
+    mesh(new THREE.BoxGeometry(w * 1.6, 0.18, d * 1.6), 0xd0dce8).position.y = h/2 - 0.09
+    // base
+    mesh(new THREE.BoxGeometry(w * 1.5, 0.15, d * 1.5), 0xd0dce8).position.y = -h/2 + 0.07
+  }
+  // ── FLOORS ──
+  else if (id.startsWith('floor') || id === 'landing') {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+    // tile grid lines
+    const tileSz = 1
+    for (let tx = -w/2 + tileSz; tx < w/2; tx += tileSz) {
+      const g = new THREE.BoxGeometry(0.02, h+0.01, d)
+      const m2 = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.25 }))
+      m2.position.x = tx
+      group.add(m2)
+    }
+    for (let tz = -d/2 + tileSz; tz < d/2; tz += tileSz) {
+      const g = new THREE.BoxGeometry(w, h+0.01, 0.02)
+      const m2 = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x88aacc, transparent: true, opacity: 0.25 }))
+      m2.position.z = tz
+      group.add(m2)
+    }
+  }
+  // ── CEILING ──
+  else if (id.startsWith('ceiling')) {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+  }
+  // ── DOOR (single) ──
+  else if (id === 'door') {
+    // frame: left post, right post, top bar
+    const postH = h, postW = 0.12
+    mesh(new THREE.BoxGeometry(postW, postH, d * 3), 0x8B6914).position.x = -w/2 + postW/2
+    mesh(new THREE.BoxGeometry(postW, postH, d * 3), 0x8B6914).position.x =  w/2 - postW/2
+    mesh(new THREE.BoxGeometry(w, postW, d * 3), 0x8B6914).position.y = h/2 - postW/2
+    // door panel
+    const panel = mesh(new THREE.BoxGeometry(w - postW*2, h - postW, d), color)
+    panel.position.x = -0.05
+    panel.position.y = -postW/2
+    // handle
+    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6),
+      new THREE.MeshLambertMaterial({ color: 0xd4a800 }))
+    handle.position.set(w/2 - 0.25, -0.1, d/2 + 0.05)
+    group.add(handle)
+  }
+  // ── DOUBLE DOOR ──
+  else if (id === 'door-dbl') {
+    const postW = 0.12, half = w/2
+    mesh(new THREE.BoxGeometry(postW, h, d*3), 0x8B6914).position.x = -half
+    mesh(new THREE.BoxGeometry(postW, h, d*3), 0x8B6914).position.x =  half
+    mesh(new THREE.BoxGeometry(postW, h, d*3), 0x8B6914).position.x = 0
+    mesh(new THREE.BoxGeometry(w, postW, d*3), 0x8B6914).position.y = h/2 - postW/2
+    mesh(new THREE.BoxGeometry(half - postW*1.5, h - postW, d), color).position.x = -half/2
+    mesh(new THREE.BoxGeometry(half - postW*1.5, h - postW, d), color).position.x =  half/2
+  }
+  // ── ARCHED DOOR ──
+  else if (id === 'door-arch') {
+    mesh(new THREE.BoxGeometry(0.12, h, d*3), 0x8B6914).position.x = -w/2
+    mesh(new THREE.BoxGeometry(0.12, h, d*3), 0x8B6914).position.x =  w/2
+    mesh(new THREE.BoxGeometry(w, 0.12, d*3), 0x8B6914).position.y = h/2
+    mesh(new THREE.BoxGeometry(w - 0.24, h - 0.12, d), color).position.y = -0.06
+  }
+  // ── GATE / BARS ──
+  else if (id === 'gate') {
+    const barW = 0.08, spacing = w / 5
+    mesh(new THREE.BoxGeometry(w, 0.1, d*2), 0x334155).position.y = -h/2 + 0.05
+    mesh(new THREE.BoxGeometry(w, 0.1, d*2), 0x334155).position.y =  h/2 - 0.05
+    mesh(new THREE.BoxGeometry(w, 0.1, d*2), 0x334155).position.y = 0
+    for (let i = 0; i <= 5; i++) {
+      const bar = mesh(new THREE.BoxGeometry(barW, h, barW), 0x475569)
+      bar.position.x = -w/2 + i * spacing
+      // spearhead top
+      const tip = mesh(new THREE.ConeGeometry(barW*0.9, 0.25, 4), 0x64748b)
+      tip.position.set(-w/2 + i * spacing, h/2 + 0.12, 0)
+    }
+  }
+  // ── WINDOW ──
+  else if (id === 'window' || id === 'window-lg') {
+    // outer frame
+    mesh(new THREE.BoxGeometry(w, h, d*3), 0x7090b0)
+    // glass pane (slightly inset, transparent)
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.1, h - 0.1, 0.02),
+      new THREE.MeshLambertMaterial({ color: 0xc8e8ff, transparent: true, opacity: isGhost ? 0.25 : 0.5 })
+    )
+    group.add(glass)
+    // cross divider
+    mesh(new THREE.BoxGeometry(w - 0.08, 0.05, 0.04), 0x7090b0).position.y = 0
+    mesh(new THREE.BoxGeometry(0.05, h - 0.08, 0.04), 0x7090b0).position.x = 0
+  }
+  // ── OPEN ARCH ──
+  else if (id === 'arch') {
+    mesh(new THREE.BoxGeometry(0.2, h, d), 0xc0ccd8).position.x = -w/2 + 0.1
+    mesh(new THREE.BoxGeometry(0.2, h, d), 0xc0ccd8).position.x =  w/2 - 0.1
+    mesh(new THREE.BoxGeometry(w, 0.3, d), 0xc0ccd8).position.y = h/2 - 0.15
+    // keystone
+    mesh(new THREE.BoxGeometry(0.35, 0.4, d * 1.2), 0xa8b8c8).position.y = h/2 - 0.35
+  }
+  // ── STAIRCASE ──
+  else if (id === 'stair' || id === 'stair-sm') {
+    const steps  = 8
+    const stepH  = h / steps
+    const stepD  = d / steps
+    for (let i = 0; i < steps; i++) {
+      const sw2 = w, sh2 = stepH * (i+1), sd2 = stepD
+      const s = mesh(new THREE.BoxGeometry(sw2, sh2, sd2), color)
+      s.position.y = -h/2 + sh2/2
+      s.position.z =  d/2 - stepD/2 - i * stepD
+    }
+    // side walls
+    mesh(new THREE.BoxGeometry(0.1, h, d), 0x8898a8).position.x = -w/2 + 0.05
+    mesh(new THREE.BoxGeometry(0.1, h, d), 0x8898a8).position.x =  w/2 - 0.05
+  }
+  // ── RAMP ──
+  else if (id === 'ramp') {
+    // sloped box using shear — fake it with a wedge of stacked thin slabs
+    const slabs = 10
+    for (let i = 0; i < slabs; i++) {
+      const sh2 = (h / slabs) * (i + 1)
+      const s = mesh(new THREE.BoxGeometry(w, 0.02, d / slabs), color)
+      s.position.y = -h/2 + sh2
+      s.position.z =  d/2 - (d/slabs/2) - i * (d/slabs)
+    }
+    // side walls
+    mesh(new THREE.BoxGeometry(0.1, h, d), 0x8898a8).position.x = -w/2 + 0.05
+    mesh(new THREE.BoxGeometry(0.1, h, d), 0x8898a8).position.x =  w/2 - 0.05
+  }
+  // ── LIGHTS ──
+  else if (id === 'light-ceil') {
+    mesh(new THREE.BoxGeometry(w, h, d), 0xffffff)
+    // glow disc
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(w * 1.2, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.5 }))
+    glow.rotation.x = -Math.PI/2
+    glow.position.y = -h/2 - 0.01
+    group.add(glow)
+  }
+  else if (id === 'light-wall') {
+    mesh(new THREE.BoxGeometry(w*2, h*2, d), 0xffe080)
+    mesh(new THREE.BoxGeometry(w*0.8, h*0.8, d*2), 0xffffff).position.z = d
+  }
+  else if (id === 'light-floor') {
+    // base
+    mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.1, 8), 0x888888).position.y = -h/2 + 0.05
+    // pole
+    mesh(new THREE.CylinderGeometry(0.04, 0.04, h - 0.3, 6), 0xaaaaaa).position.y = -0.1
+    // shade
+    mesh(new THREE.CylinderGeometry(0.25, 0.15, 0.3, 8), color).position.y = h/2 - 0.2
+  }
+  else if (id === 'spotlight') {
+    mesh(new THREE.CylinderGeometry(w*0.4, w*0.6, h, 8), 0x888888)
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(w*0.8, h*0.8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffee44, transparent: true, opacity: 0.3, side: THREE.DoubleSide }))
+    cone.rotation.x = Math.PI
+    cone.position.y = -h
+    group.add(cone)
+  }
+  // ── BED ──
+  else if (id === 'bed') {
+    // mattress
+    mesh(new THREE.BoxGeometry(w, h * 0.5, d), color).position.y = h*0.1
+    // pillow
+    mesh(new THREE.BoxGeometry(w * 0.7, h * 0.3, d * 0.25), 0xffffff).position.set(0, h*0.4, -d/2 + d*0.15)
+    // legs x4
+    const legH = h * 0.3
+    ;[[-w/2+0.1, -d/2+0.1],[w/2-0.1,-d/2+0.1],[-w/2+0.1,d/2-0.1],[w/2-0.1,d/2-0.1]].forEach(([lx,lz]) => {
+      mesh(new THREE.BoxGeometry(0.08, legH, 0.08), 0x8B6914).position.set(lx, -h/2 + legH/2 - h*0.1, lz)
+    })
+    // headboard
+    mesh(new THREE.BoxGeometry(w, h*0.9, 0.08), 0xb07830).position.set(0, h*0.1, -d/2 + 0.04)
+  }
+  // ── TABLE ──
+  else if (id === 'table') {
+    mesh(new THREE.BoxGeometry(w, 0.08, d), color).position.y = h/2 - 0.04
+    ;[[-w/2+0.1,d/2-0.1],[w/2-0.1,d/2-0.1],[-w/2+0.1,-d/2+0.1],[w/2-0.1,-d/2+0.1]].forEach(([lx,lz]) => {
+      mesh(new THREE.BoxGeometry(0.08, h - 0.08, 0.08), 0x8B6914).position.set(lx, -0.04, lz)
+    })
+  }
+  // ── DESK ──
+  else if (id === 'desk') {
+    mesh(new THREE.BoxGeometry(w, 0.08, d), color).position.y = h/2 - 0.04
+    // two pedestals instead of four legs
+    mesh(new THREE.BoxGeometry(0.5, h - 0.08, d - 0.1), 0x8B5E30).position.set(-w/2 + 0.3, -0.04, 0)
+    mesh(new THREE.BoxGeometry(0.5, h - 0.08, d - 0.1), 0x8B5E30).position.set( w/2 - 0.3, -0.04, 0)
+  }
+  // ── CABINET ──
+  else if (id === 'cabinet') {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+    // drawer lines
+    for (let y = -h/2 + 0.3; y < h/2; y += 0.4) {
+      mesh(new THREE.BoxGeometry(w+0.01, 0.02, 0.01), 0x5a3a10).position.set(0, y, d/2)
+    }
+    // handle dots
+    mesh(new THREE.SphereGeometry(0.04, 6, 6), 0xd4a800).position.set(0,  h/4, d/2+0.01)
+    mesh(new THREE.SphereGeometry(0.04, 6, 6), 0xd4a800).position.set(0, -h/4, d/2+0.01)
+  }
+  // ── SHELF ──
+  else if (id === 'shelf') {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+    // books on shelf
+    const bookColors = [0xe05050, 0x3050e0, 0x20a050, 0xe08030, 0x9030b0]
+    for (let i = 0; i < 5; i++) {
+      const bk = new THREE.Mesh(new THREE.BoxGeometry(w/7, h*3, d*0.9),
+        new THREE.MeshLambertMaterial({ color: bookColors[i] }))
+      bk.position.x = -w/2 + (w/7)*0.6 + i * (w/5.5)
+      group.add(bk)
+    }
+  }
+  // ── BARREL ──
+  else if (id === 'barrel') {
+    mesh(new THREE.CylinderGeometry(w/2, w/2 * 0.9, h, 10), color)
+    // hoops
+    ;[-h*0.3, 0, h*0.3].forEach(y => {
+      mesh(new THREE.TorusGeometry(w/2 + 0.02, 0.03, 6, 12), 0x5a3a10).position.y = y
+    })
+  }
+  // ── DEFAULT fallback ──
+  else {
+    mesh(new THREE.BoxGeometry(w, h, d), color)
+  }
+
+  return group
+}
+
+function makeMesh(type, alpha = 1) {
+  const group = buildGeometry(type, alpha)
+  group.userData.pieceType = type.id
+  return group
+}
+
+function spawnGhost() {
+  if (ghost) scene.remove(ghost)
+  ghost = makeMesh(heldType, 0.38)
+  ghost.userData.isGhost = true
+  scene.add(ghost)
+}
+
+// ═══════════════════════════════════════════════════
+// SNAP + RAYCAST
+// ═══════════════════════════════════════════════════
+const raycaster = new THREE.Raycaster()
+
+function snapV(v) {
+  const s = SNAP_OPTS[snapIdx]
+  return Math.round(v / s) * s
+}
+
+function getCursorWorld() {
+  // Cast ray from center of screen
+  raycaster.setFromCamera({ x: 0, y: 0 }, cam)
+  rayPlane.position.y = FLOOR_Y[curFloor]
+  const hits = raycaster.intersectObject(rayPlane)
+  if (!hits.length) return null
+  return new THREE.Vector3(snapV(hits[0].point.x), FLOOR_Y[curFloor], snapV(hits[0].point.z))
+}
+
+function getPieceUnderCursor() {
+  raycaster.setFromCamera({ x: 0, y: 0 }, cam)
+  const allMeshes = []
+  pieces.forEach(p => p.mesh.traverse(c => { if (c.isMesh) allMeshes.push(c) }))
+  const hits = raycaster.intersectObjects(allMeshes, false)
+  if (!hits.length) return null
+  // Walk up to find the root Group that is in our pieces array
+  let obj = hits[0].object
+  while (obj.parent) {
+    const found = pieces.find(p => p.mesh === obj)
+    if (found) return found
+    obj = obj.parent
+  }
+  return null
+}
+
+// ═══════════════════════════════════════════════════
+// PLACE / ERASE / SELECT
+// ═══════════════════════════════════════════════════
+// ── FACE-SNAP: find closest piece face and align to it ──
+// Returns adjusted {x, z} snapped flush against nearest piece edge
+// Falls back to grid snap if nothing nearby
+function faceSnapPosition(wp, type, rotY) {
+  const REACH = 3.0  // max metres to snap across
+  // Effective half-sizes accounting for rotation
+  const angle   = rotY
+  const cosA    = Math.abs(Math.cos(angle))
+  const sinA    = Math.abs(Math.sin(angle))
+  const halfW   = (type.w * cosA + type.d * sinA) / 2
+  const halfD   = (type.w * sinA + type.d * cosA) / 2
+
+  let bestDist  = REACH
+  let bestX     = wp.x
+  let bestZ     = wp.z
+
+  for (const p of pieces) {
+    if (p.data.floor !== curFloor) continue
+    const pr    = (p.data.rot * Math.PI) / 180
+    const pcosA = Math.abs(Math.cos(pr))
+    const psinA = Math.abs(Math.sin(pr))
+    const pHalfW = (p.data.w * pcosA + p.data.d * psinA) / 2
+    const pHalfD = (p.data.w * psinA + p.data.d * pcosA) / 2
+    const px = p.data.x, pz = p.data.z
+
+    // Check all 4 faces of existing piece
+    const faces = [
+      { x: px + pHalfW + halfW, z: pz,         axis: 'x' },  // east face
+      { x: px - pHalfW - halfW, z: pz,         axis: 'x' },  // west face
+      { x: px,                  z: pz + pHalfD + halfD, axis: 'z' },  // south face
+      { x: px,                  z: pz - pHalfD - halfD, axis: 'z' },  // north face
+    ]
+    for (const face of faces) {
+      const dist = Math.sqrt((wp.x - face.x)**2 + (wp.z - face.z)**2)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestX    = face.x
+        bestZ    = face.z
+      }
+    }
+  }
+  return { x: bestX, z: bestZ }
+}
+
+// Track last placed position for zoop
+let lastPlacedPos = null
+
+// ── STACKING ──
+let stackMode         = false
+let placeHeightOffset = 0
+
+function setStackMode(on) {
+  stackMode = on
+  const btn = document.getElementById('btn-stack')
+  if (btn) btn.classList.toggle('on', on)
+  toast(on ? '📦 Stack ON — places on top of pieces' : '📦 Stack OFF')
+}
+
+// Find the piece directly below the cursor (vertical raycast downward).
+// Returns { piece, topY } or null.
+function getPieceBelowCursor(wp) {
+  const floorBase = FLOOR_Y[curFloor]
+  const above     = new THREE.Vector3(wp.x, floorBase + 30, wp.z)
+  const dir       = new THREE.Vector3(0, -1, 0)
+  const r         = new THREE.Raycaster(above, dir, 0.01, 35)
+  const allMeshes = []
+  pieces.forEach(p => p.mesh.traverse(ch => { if (ch.isMesh) allMeshes.push(ch) }))
+  const hits = r.intersectObjects(allMeshes, false)
+  if (!hits.length) return null
+  // Walk up to find owner piece record
+  let obj = hits[0].object
+  let found = null
+  while (obj) {
+    found = pieces.find(p => p.mesh === obj)
+    if (found) break
+    obj = obj.parent
+  }
+  return found ? { piece: found, topY: hits[0].point.y } : null
+}
+
+function placePiece(overridePos) {
+  const wp = overridePos || getCursorWorld()
+  if (!wp) return
+
+  const t    = heldType
+  const rotY = (heldRot * Math.PI) / 2
+
+  let finalX, finalZ, finalY
+  const floorBase = FLOOR_Y[curFloor]
+
+  if (stackMode) {
+    // Stack mode: find piece directly below cursor.
+    // Lock X/Z to that piece's center so it stacks perfectly aligned.
+    // Skip faceSnap entirely — we're going up, not sideways.
+    const below = getPieceBelowCursor(wp)
+    if (below) {
+      finalX = below.piece.data.x   // lock to piece below's center
+      finalZ = below.piece.data.z
+      finalY = below.topY + t.h / 2
+    } else {
+      // Nothing below — place on floor at cursor position
+      finalX = wp.x
+      finalZ = wp.z
+      finalY = floorBase + t.h / 2 + placeHeightOffset
+    }
+  } else if (placeHeightOffset > 0) {
+    // Manual height offset — use grid XZ, raised Y, no faceSnap
+    finalX = wp.x
+    finalZ = wp.z
+    finalY = floorBase + t.h / 2 + placeHeightOffset
+  } else {
+    // Default: faceSnap to nearest piece edge, place on floor
+    const snapped = faceSnapPosition(wp, t, rotY)
+    finalX = snapped.x
+    finalZ = snapped.z
+    finalY = floorBase + t.h / 2
+  }
+
+  const mesh = makeMesh(t)
+  mesh.rotation.y = rotY
+  mesh.position.set(finalX, finalY, finalZ)
+  mesh.userData.pieceId = Date.now() + Math.random()
+  scene.add(mesh)
+
+  const data = {
+    id: t.id, label: t.name, icon: t.icon,
+    x: finalX, y: finalY, z: finalZ,
+    w: t.w, h: t.h, d: t.d,
+    rot: heldRot * 90,
+    floor: curFloor,
+    color: t.hex,
+    cat: t.cat,
+  }
+  mesh.userData = { ...mesh.userData, ...data }
+  pieces.push({ mesh, data })
+
+  lastPlacedPos = { x: finalX, z: finalZ }
+  updateStats()
+  if (!zoopHeld) refreshQBody()
+}
+
+function erasePiece() {
+  const hit = getPieceUnderCursor()
+  if (!hit) return
+  scene.remove(hit.mesh)
+  hit.mesh.geometry.dispose()
+  pieces = pieces.filter(p => p !== hit)
+  if (selectedP === hit) { selectedP = null }
+  updateStats()
+  refreshQBody()
+  toast('Deleted')
+}
+
+function selectPiece() {
+  const hit = getPieceUnderCursor()
+  selectedP = hit
+  refreshQBody()
+}
+
+// ═══════════════════════════════════════════════════
+// ROTATE HELD PIECE
+// ═══════════════════════════════════════════════════
+function rotateHeld() {
+  heldRot = (heldRot + 1) % 4
+  if (ghost) ghost.rotation.y = (heldRot * Math.PI) / 2
+  toast(`Rotation: ${heldRot * 90}°`)
+}
+window.rotateHeld = rotateHeld
+
+// ═══════════════════════════════════════════════════
+// LOCKING / POINTER LOCK
+// ═══════════════════════════════════════════════════
+window.toggleLock = function() {
+  if (locked) {
+    document.exitPointerLock()
+  } else {
+    canvas.requestPointerLock()
+  }
+}
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas
+  document.getElementById('btn-lock').classList.toggle('on', locked)
+  document.getElementById('btn-lock').innerHTML = locked
+    ? '<span class="ico">🔓</span> Editing...'
+    : '<span class="ico">🔒</span> Click to Edit'
+  document.getElementById('place-panel').classList.toggle('visible', locked)
+  document.getElementById('xhair').style.display = locked ? 'block' : 'none'
+
+  if (locked && placeMode === 'place') spawnGhost()
+  if (!locked && ghost) { scene.remove(ghost); ghost = null }
+  Object.keys(keys).forEach(k => keys[k] = false)
+})
+
+// ═══════════════════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════════════════
+window.setPlaceMode = function(m) {
+  placeMode = m
+  if (m === 'place' && locked) spawnGhost()
+  else if (ghost) { scene.remove(ghost); ghost = null }
+  document.getElementById('bmplace').classList.toggle('on', m === 'place')
+  document.getElementById('bmerase').classList.toggle('on', m === 'erase')
+  document.getElementById('st-mode').textContent = m[0].toUpperCase() + m.slice(1)
+}
+
+addEventListener('keydown', e => {
+  keys[e.code] = true
+
+  // Always available (even unlocked)
+  if (e.code === 'KeyQ') { e.preventDefault(); toggleQPanel() }
+
+  // ── Arrow Up/Down = cycle pieces one by one ──
+  // ── Arrow Left/Right = jump to prev/next category ──
+  if (locked && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
+    e.preventDefault()
+    const idx  = CATALOGUE.indexOf(heldType)
+    const cats = [...new Set(CATALOGUE.map(p => p.cat))]
+
+    if (e.code === 'ArrowUp') {
+      selectHeldType(CATALOGUE[(idx - 1 + CATALOGUE.length) % CATALOGUE.length])
+    } else if (e.code === 'ArrowDown') {
+      selectHeldType(CATALOGUE[(idx + 1) % CATALOGUE.length])
+    } else if (e.code === 'ArrowLeft') {
+      const prev = cats[(cats.indexOf(heldType.cat) - 1 + cats.length) % cats.length]
+      selectHeldType(CATALOGUE.find(p => p.cat === prev))
+    } else if (e.code === 'ArrowRight') {
+      const next = cats[(cats.indexOf(heldType.cat) + 1) % cats.length]
+      selectHeldType(CATALOGUE.find(p => p.cat === next))
+    }
+    return
+  }
+
+  if (!locked) return
+
+  if (e.code === 'KeyF') setPlaceMode('place')
+  if (e.code === 'KeyX') setPlaceMode('erase')
+  if (e.code === 'KeyR') rotateHeld()
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    if (selectedP) {
+      scene.remove(selectedP.mesh)
+      selectedP.mesh.geometry.dispose()
+      pieces = pieces.filter(p => p !== selectedP)
+      selectedP = null
+      updateStats(); refreshQBody()
+    }
+  }
+
+  if (e.code === 'Enter' && placeMode === 'place') placePiece()
+
+  // Z = toggle zoop
+  if (e.code === 'KeyZ') { e.preventDefault(); setZoopMode(!zoopMode) }
+
+  // T = toggle stacking (place on top of whatever is under cursor)
+  if (e.code === 'KeyT') { e.preventDefault(); setStackMode(!stackMode) }
+
+  // [ ] = move placement height up/down (for stacking manually)
+  if (e.code === 'BracketLeft')  { placeHeightOffset = Math.max(0, placeHeightOffset - 0.5); toast('Height: ' + placeHeightOffset.toFixed(1) + 'm') }
+  if (e.code === 'BracketRight') { placeHeightOffset += 0.5; toast('Height: +' + placeHeightOffset.toFixed(1) + 'm') }
+  if (e.code === 'Backquote')    { placeHeightOffset = 0; toast('Height reset to floor') }
+})
+
+addEventListener('keyup', e => keys[e.code] = false)
+
+// ── ZOOP MODE — toggled with Z key ──
+// OFF: single click places one piece
+// ON:  hold mouse and drag → stamps edge-to-edge continuously
+let zoopMode    = false   // toggled by Z key
+let zoopHeld    = false   // true while mouse is held in zoop mode
+let zoopLastPos = null
+
+function setZoopMode(on) {
+  zoopMode = on
+  const btn = document.getElementById('btn-zoop')
+  if (btn) btn.classList.toggle('on', on)
+  toast(on ? '⚡ Zoop ON — hold click + drag' : '⚡ Zoop OFF')
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (!locked || e.button !== 0) return
+  if (placeMode === 'erase') { erasePiece(); return }
+  if (placeMode !== 'place') return
+
+  if (zoopMode) {
+    // Zoop: start dragging
+    zoopHeld    = true
+    zoopLastPos = null
+    placePiece()       // stamp on first press
+  } else {
+    // Normal: place once
+    placePiece()
+  }
+})
+
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 0) { zoopHeld = false; zoopLastPos = null }
+})
+
+canvas.addEventListener('click', () => { /* handled by mousedown */ })
+
+// Mouse look
+addEventListener('mousemove', e => {
+  if (!locked) return
+  camYaw   -= e.movementX * 0.0022
+  camPitch -= e.movementY * 0.0022
+  camPitch  = Math.max(-1.35, Math.min(1.35, camPitch))
+})
+
+// ═══════════════════════════════════════════════════
+// Q PANEL
+// ═══════════════════════════════════════════════════
+function toggleQPanel() {
+  qOpen = !qOpen
+  document.getElementById('q-panel').classList.toggle('open', qOpen)
+  if (qOpen) refreshQBody()
+}
+function closeQPanel() {
+  qOpen = false
+  document.getElementById('q-panel').classList.remove('open')
+}
+window.closeQPanel = closeQPanel
+
+window.qTab = function(tab) {
+  qCurrentTab = tab
+  ;['placed','props','settings'].forEach(t => {
+    document.getElementById('qtab-' + t)?.classList.toggle('on', t === tab)
+  })
+  refreshQBody()
+}
+
+function refreshQBody() {
+  const body = document.getElementById('q-body')
+  if (!body) return
+  if (qCurrentTab === 'placed') renderQPlaced(body)
+  else if (qCurrentTab === 'props') renderQProps(body)
+  else renderQSettings(body)
+}
+
+function renderQPlaced(body) {
+  if (!pieces.length) {
+    body.innerHTML = '<div style="padding:20px 14px;color:#cbd5e1;font-size:12px">No pieces placed yet.</div>'
+    return
+  }
+  const cats = [...new Set(pieces.map(p => p.data.cat))]
+  let html = ''
+  for (const cat of cats) {
+    html += `<div class="q-section">${cat}</div>`
+    for (const p of pieces.filter(x => x.data.cat === cat)) {
+      const sel = p === selectedP
+      html += `<div class="q-item${sel?' sel':''}" onclick="window._qsel('${p.mesh.userData.pieceId}')">
+        <div class="q-icon">${p.data.icon}</div>
+        <div class="q-info">
+          <div class="q-name">${p.data.label}</div>
+          <div class="q-sub">${FLOOR_NAMES[p.data.floor]} · ${p.data.x.toFixed(1)}, ${p.data.z.toFixed(1)}</div>
+        </div>
+      </div>`
+    }
+  }
+  body.innerHTML = html
+}
+
+window._qsel = function(id) {
+  selectedP = pieces.find(p => String(p.mesh.userData.pieceId) === String(id)) || null
+  if (selectedP) qTab('props')
+  else refreshQBody()
+}
+
+function renderQProps(body) {
+  if (!selectedP) {
+    body.innerHTML = '<div style="padding:20px 14px;color:#cbd5e1;font-size:12px">Select a piece from the Placed tab or look at one while editing.</div>'
+    return
+  }
+  const d = selectedP.data
+  const m = selectedP.mesh
+  body.innerHTML = `
+    <div class="q-prop"><label>Label</label><input id="qp-label" value="${d.label}"></div>
+    <div class="q-prop"><label>Position X</label><input id="qp-x" type="number" step="0.5" value="${d.x.toFixed(2)}"></div>
+    <div class="q-prop"><label>Position Z</label><input id="qp-z" type="number" step="0.5" value="${d.z.toFixed(2)}"></div>
+    <div class="q-prop"><label>Floor</label>
+      <select id="qp-floor">
+        ${FLOOR_NAMES.map((n,i)=>`<option value="${i}"${d.floor===i?' selected':''}>${n}</option>`).join('')}
+      </select>
+    </div>
+    <div class="q-prop"><label>Width (W)</label><input id="qp-w" type="number" step="0.25" value="${d.w}"></div>
+    <div class="q-prop"><label>Depth (D)</label><input id="qp-d" type="number" step="0.25" value="${d.d}"></div>
+    <div class="q-prop"><label>Height (H)</label><input id="qp-h" type="number" step="0.25" value="${d.h}"></div>
+    <div class="q-prop"><label>Rotation °</label><input id="qp-rot" type="number" step="90" value="${d.rot}"></div>
+    <div class="q-prop"><label>Color</label><input id="qp-color" type="color" value="${d.color}" style="height:34px;padding:2px"></div>
+    <button class="q-del" onclick="window._qdel()">🗑 Delete This Piece</button>
+  `
+  // Live apply
+  const fields = ['label','x','z','floor','w','d','h','rot','color']
+  fields.forEach(f => {
+    document.getElementById('qp-' + f)?.addEventListener('input', applyQProps)
+    document.getElementById('qp-' + f)?.addEventListener('change', applyQProps)
+  })
+}
+
+function applyQProps() {
+  if (!selectedP) return
+  const d = selectedP.data
+  const m = selectedP.mesh
+  d.label = document.getElementById('qp-label')?.value || d.label
+  d.x     = parseFloat(document.getElementById('qp-x')?.value)  || d.x
+  d.z     = parseFloat(document.getElementById('qp-z')?.value)  || d.z
+  d.w     = parseFloat(document.getElementById('qp-w')?.value)  || d.w
+  d.h     = parseFloat(document.getElementById('qp-h')?.value)  || d.h
+  d.d     = parseFloat(document.getElementById('qp-d')?.value)  || d.d
+  d.rot   = parseFloat(document.getElementById('qp-rot')?.value)|| d.rot
+  d.color = document.getElementById('qp-color')?.value || d.color
+  d.floor = parseInt(document.getElementById('qp-floor')?.value ?? d.floor)
+
+  m.position.set(d.x, FLOOR_Y[d.floor] + d.h / 2, d.z)
+  m.rotation.y = (d.rot * Math.PI) / 180
+  m.material.color.set(d.color)
+  m.geometry.dispose()
+  m.geometry = new THREE.BoxGeometry(d.w, d.h, d.d)
+  m.children[0].geometry.dispose()
+  m.children[0].geometry = new THREE.EdgesGeometry(m.geometry)
+}
+
+window._qdel = function() {
+  if (!selectedP) return
+  scene.remove(selectedP.mesh)
+  selectedP.mesh.geometry.dispose()
+  pieces = pieces.filter(p => p !== selectedP)
+  selectedP = null
+  updateStats()
+  qTab('placed')
+}
+
+// Scene settings tab
+function renderQSettings(body) {
+  body.innerHTML = `
+    <div class="q-section">Environment</div>
+    <div class="q-prop"><label>Ambient Brightness</label>
+      <input type="range" id="qs-amb" min="0" max="2" step="0.05" value="0.75">
+    </div>
+    <div class="q-prop"><label>Sun Brightness</label>
+      <input type="range" id="qs-sun" min="0" max="2" step="0.05" value="0.85">
+    </div>
+    <div class="q-prop"><label>Fog Distance</label>
+      <input type="range" id="qs-fog" min="30" max="300" step="10" value="200">
+    </div>
+    <div class="q-prop"><label>Background Color</label>
+      <input type="color" id="qs-bg" value="#f0f4f8" style="height:34px;padding:2px">
+    </div>
+    <div class="q-section">Grid</div>
+    <div class="q-prop"><label>Show All Floors</label>
+      <select id="qs-grid">
+        <option value="cur">Current floor only</option>
+        <option value="all">All floors</option>
+        <option value="none">Hide grids</option>
+      </select>
+    </div>
+    <div class="q-section">Export</div>
+    <div class="q-prop" style="padding-bottom:10px">
+      <button class="q-del" style="background:#dbeafe;color:#1d4ed8;margin:0;width:100%" onclick="window.saveMap()">💾 Save Map JSON</button>
+    </div>
+  `
+  document.getElementById('qs-amb')?.addEventListener('input', e => {
+    scene.children.find(c => c.isAmbientLight).intensity = parseFloat(e.target.value)
+  })
+  document.getElementById('qs-sun')?.addEventListener('input', e => {
+    sun.intensity = parseFloat(e.target.value)
+  })
+  document.getElementById('qs-fog')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value)
+    scene.fog.far = v; scene.fog.near = v * 0.4
+  })
+  document.getElementById('qs-bg')?.addEventListener('input', e => {
+    renderer.setClearColor(e.target.value)
+  })
+  document.getElementById('qs-grid')?.addEventListener('change', e => {
+    grids.forEach((g, i) => {
+      if (e.target.value === 'all')  g.visible = true
+      else if (e.target.value === 'none') g.visible = false
+      else g.visible = i === curFloor
+    })
+  })
+}
+
+// ═══════════════════════════════════════════════════
+// FLOOR / SNAP
+// ═══════════════════════════════════════════════════
+window.setFloor = function(f) {
+  curFloor = f
+  grids.forEach((g, i) => g.visible = i === f)
+  rayPlane.position.y = FLOOR_Y[f]
+  ;['fb0','fb1','fb2','fb3'].forEach((id, i) =>
+    document.getElementById(id)?.classList.toggle('on', i === f)
+  )
+  document.getElementById('st-floor').textContent = FLOOR_NAMES[f]
+}
+
+window.cycleSnap = function() {
+  snapIdx = (snapIdx + 1) % SNAP_OPTS.length
+  document.getElementById('snap-val').textContent = SNAP_OPTS[snapIdx] + 'm'
+}
+
+// ═══════════════════════════════════════════════════
+// SAVE
+// ═══════════════════════════════════════════════════
+window.saveMap = function() {
+  const out = {
+    version: 1,
+    exported: new Date().toISOString(),
+    pieces: pieces.map(p => ({ ...p.data }))
+  }
+  const json = JSON.stringify(out, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'asylum-layout.json'
+  a.click()
+  toast('💾 Saved as asylum-layout.json')
+}
+
+window.clearAll = function() {
+  if (!pieces.length || !confirm('Clear all pieces?')) return
+  pieces.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose() })
+  pieces = []
+  selectedP = null
+  updateStats(); refreshQBody()
+  toast('Cleared')
+}
+
+// ═══════════════════════════════════════════════════
+// STATS + TOAST
+// ═══════════════════════════════════════════════════
+function updateStats() {
+  document.getElementById('st-count').textContent = pieces.length
+}
+
+let toastTimer = null
+function toast(msg) {
+  const el = document.getElementById('hint')
+  el.textContent = msg
+  el.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800)
+}
+window.toast = toast
+
+// ═══════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════
+const clock = new THREE.Clock()
+
+function animate() {
+  requestAnimationFrame(animate)
+  const dt = Math.min(clock.getDelta(), 0.05)
+
+  // ── FLY MOVEMENT ──
+  if (locked) {
+    cam.rotation.y = camYaw
+    cam.rotation.x = camPitch
+
+    const speed = 10 * dt
+    const fwd   = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, camYaw, 0, 'YXZ'))
+    const right = new THREE.Vector3(1, 0,  0).applyEuler(new THREE.Euler(0, camYaw, 0, 'YXZ'))
+
+    if (keys['KeyW'])     cam.position.addScaledVector(fwd,   speed)
+    if (keys['KeyS'])     cam.position.addScaledVector(fwd,  -speed)
+    if (keys['KeyA'])     cam.position.addScaledVector(right, -speed)
+    if (keys['KeyD'])     cam.position.addScaledVector(right,  speed)
+    if (keys['Space'])    cam.position.y += speed * 0.8    // float up
+    if (keys['KeyE'])     cam.position.y -= speed * 0.8    // sink down
+    // Shift = faster
+    if (keys['ShiftLeft'] || keys['ShiftRight']) {
+      if (keys['KeyW']) cam.position.addScaledVector(fwd,  speed * 2)
+      if (keys['KeyS']) cam.position.addScaledVector(fwd, -speed * 2)
+    }
+
+    // Update ghost + ZOOP continuous stamp
+    if (placeMode === 'place') {
+      const wp = getCursorWorld()
+      if (wp) {
+        // Ghost preview — mirrors exact logic of placePiece
+        if (ghost) {
+          const rotY    = (heldRot * Math.PI) / 2
+          const floorBase = FLOOR_Y[curFloor]
+          let gx, gy, gz
+
+          if (stackMode) {
+            const below = getPieceBelowCursor(wp)
+            if (below) {
+              gx = below.piece.data.x
+              gz = below.piece.data.z
+              gy = below.topY + heldType.h / 2
+            } else {
+              gx = wp.x; gz = wp.z
+              gy = floorBase + heldType.h / 2 + placeHeightOffset
+            }
+          } else if (placeHeightOffset > 0) {
+            gx = wp.x; gz = wp.z
+            gy = floorBase + heldType.h / 2 + placeHeightOffset
+          } else {
+            const snapped = faceSnapPosition(wp, heldType, rotY)
+            gx = snapped.x; gz = snapped.z
+            gy = floorBase + heldType.h / 2
+          }
+
+          ghost.position.set(gx, gy, gz)
+          ghost.rotation.y = rotY
+        }
+        document.getElementById('st-pos').textContent =
+          wp.x.toFixed(1) + ', ' + wp.z.toFixed(1)
+
+        // ZOOP: only active when zoopMode is ON and mouse is held
+        if (zoopMode && zoopHeld) {
+          const t      = heldType
+          const rotY   = (heldRot * Math.PI) / 2
+          const cosA   = Math.abs(Math.cos(rotY))
+          const sinA   = Math.abs(Math.sin(rotY))
+          const stepX  = t.w * cosA + t.d * sinA  // effective width in X
+          const stepZ  = t.w * sinA + t.d * cosA  // effective depth in Z
+
+          if (!zoopLastPos) {
+            // First stamp — place immediately
+            placePiece(wp)
+            zoopLastPos = { x: wp.x, z: wp.z }
+          } else {
+            const dx = wp.x - zoopLastPos.x
+            const dz = wp.z - zoopLastPos.z
+            // Only advance when cursor has moved >= one full piece dimension
+            // Determine dominant axis from movement direction
+            const movedEnoughX = Math.abs(dx) >= stepX * 0.9
+            const movedEnoughZ = Math.abs(dz) >= stepZ * 0.9
+            if (movedEnoughX || movedEnoughZ) {
+              // Step in dominant axis by exact piece size
+              const nextX = zoopLastPos.x + (movedEnoughX ? Math.sign(dx) * stepX : 0)
+              const nextZ = zoopLastPos.z + (movedEnoughZ ? Math.sign(dz) * stepZ : 0)
+              const nextPos = new THREE.Vector3(nextX, FLOOR_Y[curFloor], nextZ)
+              placePiece(nextPos)
+              zoopLastPos = { x: nextX, z: nextZ }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  renderer.render(scene, cam)
+}
+animate()
+
+// Init
+setFloor(0)
+setPlaceMode('place')
+document.getElementById('xhair').style.display = 'none'
+</script>
+</body>
+</html>

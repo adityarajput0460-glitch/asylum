@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASYLUM</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; font-family: monospace; color: #fff;
+    }
+    #noise-bar-wrap {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+    }
+    #noise-label { font-size: 12px; color: #aaa; letter-spacing: 2px; }
+    #noise-bar-bg {
+      width: 200px; height: 6px; background: #222; border-radius: 3px;
+    }
+    #noise-bar {
+      height: 100%; width: 0%; background: #c0392b;
+      border-radius: 3px; transition: width 0.1s;
+    }
+    #crosshair {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px; height: 4px; background: rgba(255,255,255,0.6);
+      border-radius: 50%;
+    }
+    
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="crosshair"></div>
+    <div id="noise-bar-wrap">
+      <span id="noise-label">NOISE</span>
+      <div id="noise-bar-bg"><div id="noise-bar"></div></div>
+      <div id="floor-label" style="position:fixed; top:20px; left:50%; transform:translateX(-50%); font-family:monospace; color:#aaa; font-size:13px; letter-spacing:3px;"></div>
+    </div>
+  </div>
+  <!-- 
+  ASYLUM — Editor UI Snippet
+  Add this inside <body> in your index.html, BEFORE the <script type="module"> tag
+  Also add the <style> block into your <head>
+-->
+
+<!-- ── HUD ─────────────────────────────────────── -->
+<div id="hud-hint" style="
+  position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+  color:#e8d5aa; font-family:monospace; font-size:14px;
+  background:rgba(0,0,0,0.55); padding:6px 16px; border-radius:4px;
+  pointer-events:none; opacity:0; transition:opacity 0.2s;
+  letter-spacing:0.05em;
+">[E] Open door</div>
+
+<div id="hud-crosshair" style="
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:12px; height:12px; pointer-events:none;
+">
+  <div style="position:absolute;top:5px;left:0;width:12px;height:2px;background:rgba(255,255,255,0.6)"></div>
+  <div style="position:absolute;left:5px;top:0;width:2px;height:12px;background:rgba(255,255,255,0.6)"></div>
+</div>
+
+<!-- ── Layout Editor Overlay ───────────────────── -->
+<div id="editor-overlay" style="
+  display:none; position:fixed; inset:0;
+  pointer-events:none; z-index:100;
+">
+  <!-- Top banner -->
+  <div style="
+    pointer-events:auto;
+    position:absolute; top:0; left:0; right:0;
+    background:rgba(10,5,2,0.92); border-bottom:1px solid #3a2510;
+    padding:8px 20px; display:flex; align-items:center; gap:20px;
+    font-family:monospace; font-size:13px; color:#c8a87a;
+  ">
+    <span style="color:#f0c87a; font-weight:bold; letter-spacing:0.08em;">⚒ LAYOUT EDITOR</span>
+    <span style="color:#6a5a3a">|</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">IJKL</kbd> / <kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">Arrows</kbd> move</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">[ ]</kbd> width</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">- =</kbd> depth</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">, .</kbd> prev/next room</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">PgUp/Dn</kbd> floor</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">R</kbd> rebuild</span>
+    <span><kbd style="background:#1a1008;padding:1px 5px;border:1px solid #3a2510;border-radius:2px">X</kbd> export</span>
+    <span style="margin-left:auto"><kbd style="background:#2a1008;padding:1px 8px;border:1px solid #5a3010;border-radius:2px;color:#f0a860">Tab</kbd> close</span>
+  </div>
+
+  <!-- Room info panel — bottom left -->
+  <div style="
+    pointer-events:auto;
+    position:absolute; bottom:20px; left:20px;
+    background:rgba(10,5,2,0.92); border:1px solid #3a2510;
+    border-radius:6px; padding:16px 20px; min-width:220px;
+    font-family:monospace; font-size:13px; color:#c8a87a;
+  ">
+    <div id="editor-info">Loading...</div>
+  </div>
+</div>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box }
+body { overflow:hidden; background:#000 }
+canvas { display:block }
+
+.ed-title { font-size:11px; color:#6a5a3a; margin-bottom:4px; letter-spacing:0.06em; text-transform:uppercase }
+.ed-name  { font-size:15px; color:#f0c87a; font-weight:bold; margin-bottom:12px }
+.ed-row   { display:flex; justify-content:space-between; gap:20px; margin-bottom:4px }
+.ed-label { color:#6a5a3a }
+.ed-val   { color:#e8c890; font-weight:bold }
+
+kbd {
+  font-family: monospace;
+  font-size: 11px;
+}
+</style>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
